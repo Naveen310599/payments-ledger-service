@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -70,7 +71,8 @@ class AccountControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"inr", "IN", "RUPEE", ""})
+    // "ABC" and "XYZ" have the right shape but are not real ISO 4217 currencies
+    @ValueSource(strings = {"inr", "IN", "RUPEE", "", "ABC", "XYZ"})
     void createRejectsInvalidCurrency(String currency) throws Exception {
         mockMvc.perform(post("/api/accounts")
                        .contentType(MediaType.APPLICATION_JSON)
@@ -134,6 +136,19 @@ class AccountControllerTest {
                .andExpect(status().isBadRequest());
 
         verifyNoInteractions(accountService);
+    }
+
+    // Exercises GlobalExceptionHandler's catch-all: the internal message must never reach the client
+    @Test
+    void unexpectedErrorReturns500WithoutLeakingDetails() throws Exception {
+        when(accountService.get(ACCOUNT_ID)).thenThrow(new IllegalStateException("db password=secret"));
+
+        mockMvc.perform(get("/api/accounts/{id}", ACCOUNT_ID))
+               .andExpect(status().isInternalServerError())
+               .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+               .andExpect(jsonPath("$.title").value("Internal Server Error"))
+               .andExpect(jsonPath("$.detail").value("An unexpected error occurred"))
+               .andExpect(content().string(not(containsString("secret"))));
     }
 
     private static Account alicesAccount() {
