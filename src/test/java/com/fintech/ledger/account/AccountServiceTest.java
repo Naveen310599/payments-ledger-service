@@ -2,6 +2,7 @@ package com.fintech.ledger.account;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,5 +47,34 @@ class AccountServiceTest {
         assertThatThrownBy(() -> accountService.get(unknownId))
                 .isInstanceOf(AccountNotFoundException.class)
                 .hasMessageContaining(unknownId.toString());
+    }
+
+    @Test
+    void depositsAddUpAndAreVisibleOnLaterReads() {
+        Account account = accountService.create("Alice", "INR");
+
+        accountService.deposit(account.getId(), new BigDecimal("500.00"));
+        Account updated = accountService.deposit(account.getId(), new BigDecimal("250.50"));
+
+        assertThat(updated.getBalance()).isEqualByComparingTo("750.50");
+        assertThat(accountService.get(account.getId()).getBalance()).isEqualByComparingTo("750.50");
+    }
+
+    @Test
+    void depositKeepsTwoDecimalPlaces() {
+        Account account = accountService.create("Alice", "INR");
+
+        Account updated = accountService.deposit(account.getId(), new BigDecimal("500"));
+
+        // equals() on purpose: unlike compareTo it also checks the scale, so a balance of 500 would fail
+        assertThat(updated.getBalance()).isEqualTo(new BigDecimal("500.00"));
+    }
+
+    @Test
+    void depositThrowsWhenAccountDoesNotExist() {
+        UUID unknownId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> accountService.deposit(unknownId, new BigDecimal("10.00")))
+                .isInstanceOf(AccountNotFoundException.class);
     }
 }

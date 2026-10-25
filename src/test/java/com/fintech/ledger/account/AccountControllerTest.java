@@ -15,6 +15,8 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -149,6 +151,63 @@ class AccountControllerTest {
                .andExpect(jsonPath("$.title").value("Internal Server Error"))
                .andExpect(jsonPath("$.detail").value("An unexpected error occurred"))
                .andExpect(content().string(not(containsString("secret"))));
+    }
+
+    @Test
+    void depositReturns200WithUpdatedBalance() throws Exception {
+        // Mockito matches arguments with equals(), which for BigDecimal includes the scale:
+        // the JSON 500.00 arrives as BigDecimal("500.00"), so this stub matches it (500 would not)
+        Account afterDeposit = new Account(ACCOUNT_ID, "Alice", "INR", new BigDecimal("1750.50"), CREATED_AT);
+        when(accountService.deposit(ACCOUNT_ID, new BigDecimal("500.00"))).thenReturn(afterDeposit);
+
+        mockMvc.perform(post("/api/accounts/{id}/deposits", ACCOUNT_ID)
+                       .contentType(MediaType.APPLICATION_JSON)
+                       .content("""
+                               {"amount": 500.00}
+                               """))
+               .andExpect(status().isOk())
+               .andExpect(jsonPath("$.id").value(ACCOUNT_ID.toString()))
+               .andExpect(content().string(containsString("\"balance\":1750.50")));
+    }
+
+    @ParameterizedTest
+    // zero, negative, and a third decimal place
+    @ValueSource(strings = {"0", "-10.00", "10.001"})
+    void depositRejectsInvalidAmount(String amount) throws Exception {
+        mockMvc.perform(post("/api/accounts/{id}/deposits", ACCOUNT_ID)
+                       .contentType(MediaType.APPLICATION_JSON)
+                       .content("""
+                               {"amount": %s}
+                               """.formatted(amount)))
+               .andExpect(status().isBadRequest())
+               .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+               .andExpect(jsonPath("$.errors.amount").exists());
+
+        verifyNoInteractions(accountService);
+    }
+
+    @Test
+    void depositRejectsMissingAmount() throws Exception {
+        mockMvc.perform(post("/api/accounts/{id}/deposits", ACCOUNT_ID)
+                       .contentType(MediaType.APPLICATION_JSON)
+                       .content("{}"))
+               .andExpect(status().isBadRequest())
+               .andExpect(jsonPath("$.errors.amount").exists());
+
+        verifyNoInteractions(accountService);
+    }
+
+    @Test
+    void depositReturns404WhenAccountDoesNotExist() throws Exception {
+        when(accountService.deposit(eq(ACCOUNT_ID), any())).thenThrow(new AccountNotFoundException(ACCOUNT_ID));
+
+        mockMvc.perform(post("/api/accounts/{id}/deposits", ACCOUNT_ID)
+                       .contentType(MediaType.APPLICATION_JSON)
+                       .content("""
+                               {"amount": 10.00}
+                               """))
+               .andExpect(status().isNotFound())
+               .andExpect(jsonPath("$.title").value("Account not found"));
     }
 
     private static Account alicesAccount() {

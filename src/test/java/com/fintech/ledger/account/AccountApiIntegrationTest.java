@@ -50,4 +50,32 @@ class AccountApiIntegrationTest {
                .andExpect(jsonPath("$.currency").value("INR"))
                .andExpect(content().string(containsString("\"balance\":0.00")));
     }
+
+    @Test
+    void depositIsVisibleInLaterReads() throws Exception {
+        String id = createAccount();
+
+        mockMvc.perform(post("/api/accounts/{id}/deposits", id)
+                       .contentType(MediaType.APPLICATION_JSON)
+                       .content("""
+                               {"amount": 500.00}
+                               """))
+               .andExpect(status().isOk())
+               .andExpect(content().string(containsString("\"balance\":500.00")));
+
+        mockMvc.perform(get("/api/accounts/{id}", id))
+               .andExpect(status().isOk())
+               .andExpect(content().string(containsString("\"balance\":500.00")));
+    }
+
+    private String createAccount() throws Exception {
+        MvcResult created = mockMvc.perform(post("/api/accounts")
+                                           .contentType(MediaType.APPLICATION_JSON)
+                                           .content("""
+                                                   {"ownerName": "Alice", "currency": "INR"}
+                                                   """))
+                                   .andExpect(status().isCreated())
+                                   .andReturn();
+        return JsonPath.read(created.getResponse().getContentAsString(), "$.id");
+    }
 }
