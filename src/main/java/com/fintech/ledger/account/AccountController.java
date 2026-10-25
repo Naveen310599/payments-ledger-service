@@ -39,4 +39,11 @@ public class AccountController {
     public AccountResponse get(@PathVariable UUID id) {
         return AccountResponse.from(accountService.get(id));
     }
+
+    // 200 with the updated account. The body is validated before this runs, so a bad amount
+    // is a 400 even when the account doesn't exist.
+    @PostMapping("/{id}/deposits")
+    public AccountResponse deposit(@PathVariable UUID id, @Valid @RequestBody DepositRequest request) {
+        return AccountResponse.from(accountService.deposit(id, request.amount()));
+    }
 }

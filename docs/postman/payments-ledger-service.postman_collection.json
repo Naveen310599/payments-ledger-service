@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "payments-ledger-service",
-    "description": "Requests and checks for the payments-ledger-service API.\n\nStart the app (run LedgerApplication), then use Run collection. Run the folders in order: \"Create account\" saves the new id into the accountId variable that \"Get account\" uses.\n\nChange baseUrl under the collection's Variables tab if the app is not on localhost:8080.",
+    "description": "Requests and checks for the payments-ledger-service API.\n\nStart the app (run LedgerApplication), then use Run collection. Run the folders in order: \"Create account\" saves the new id into the accountId variable that \"Get account\" and \"Deposit\" use.\n\nChange baseUrl under the collection's Variables tab if the app is not on localhost:8080.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -112,6 +112,44 @@
             "header": [],
             "url": "{{baseUrl}}/api/accounts/{{accountId}}",
             "description": "Run \"Create account\" first: it stores the new id in the accountId collection variable."
+          }
+        },
+        {
+          "name": "Deposit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"balance went from 0.00 to 500.00\", () => {",
+                  "    // Raw text again, so a balance of 500 (lost decimal places) would fail",
+                  "    pm.expect(pm.response.text()).to.include('\"balance\":500.00');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 500.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/accounts/{{accountId}}/deposits",
+            "description": "Run \"Create account\" first. Sending this again adds another 500.00, so the balance check only passes on a fresh account."
           }
         }
       ]
@@ -307,6 +345,145 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/accounts/not-a-uuid"
+          }
+        },
+        {
+          "name": "Deposit - zero amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"names the amount field\", () => pm.expect(pm.response.json().errors).to.have.property(\"amount\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/accounts/{{$guid}}/deposits",
+            "description": "The body is validated before the account is looked up, so any id gives 400 here."
+          }
+        },
+        {
+          "name": "Deposit - negative amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"names the amount field\", () => pm.expect(pm.response.json().errors).to.have.property(\"amount\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": -10.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/accounts/{{$guid}}/deposits",
+            "description": "The body is validated before the account is looked up, so any id gives 400 here."
+          }
+        },
+        {
+          "name": "Deposit - three decimal places",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"names the amount field\", () => pm.expect(pm.response.json().errors).to.have.property(\"amount\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 10.001\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/accounts/{{$guid}}/deposits",
+            "description": "Money has at most 2 decimal places, so 10.001 is rejected."
+          }
+        },
+        {
+          "name": "Deposit - unknown account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"title says which resource is missing\", () => pm.expect(pm.response.json().title).to.eql(\"Account not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 10.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/accounts/{{$guid}}/deposits"
           }
         }
       ]

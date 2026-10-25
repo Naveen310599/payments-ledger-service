@@ -2,6 +2,7 @@ package com.fintech.ledger.account;
 
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -21,5 +22,12 @@ public class AccountService {
     public Account get(UUID id) {
         return accountRepository.findById(id)
                 .orElseThrow(() -> new AccountNotFoundException(id));
+    }
+
+    public Account deposit(UUID id, BigDecimal amount) {
+        Account account = get(id);
+        account.deposit(amount);
+        // The in-memory map already holds this same object, but JPA in step 2 needs the save
+        return accountRepository.save(account);
     }
 }
